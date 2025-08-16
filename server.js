@@ -1,6 +1,6 @@
 import WebSocket, { WebSocketServer } from "ws";
 
-const PORT = 8085;
+const PORT = 8060;
 const wss = new WebSocketServer({ port: PORT });
 
 console.log(`🚀 WS server ishga tushdi: wss://your-server-domain:${PORT}`);
