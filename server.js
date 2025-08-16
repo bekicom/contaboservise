@@ -1,51 +1,51 @@
-// server.js
 import express from "express";
-import bodyParser from "body-parser";
-import { WebSocketServer } from "ws";
 import http from "http";
+import { WebSocketServer } from "ws";
+import fs from "fs";
 
-const PORT = process.env.PORT || 8085;
 const app = express();
-
-// JSON qabul qilish uchun middleware
-app.use(bodyParser.json({ limit: "1mb" }));
-app.use(bodyParser.urlencoded({ extended: true }));
-
-// HTTP server yaratamiz
 const server = http.createServer(app);
-
-// WebSocket server
 const wss = new WebSocketServer({ server });
-let clients = [];
 
-// WebSocket ulanishi
-wss.on("connection", (ws) => {
-  clients.push(ws);
-  console.log("🟢 Frontend ulandi. Jami:", clients.length);
+const PORT = process.env.PORT || 4000;
 
-  ws.on("close", () => {
-    clients = clients.filter((c) => c !== ws);
-    console.log("🔴 Frontend uzildi. Qolgan:", clients.length);
-  });
-});
+// Middleware JSON
+app.use(express.json());
 
-// Hikvision'dan keladigan HTTP POST (Alarm Server)
-app.post("/hikvision-event", (req, res) => {
-  console.log("📩 Hikvision event:", req.body);
+// Hodim kelganda (POST /api/events)
+app.post("/api/events", (req, res) => {
+  const data = req.body;
 
-  // Eventni WebSocket orqali barcha frontend’ga yuborish
-  clients.forEach((ws) => {
-    if (ws.readyState === ws.OPEN) {
-      ws.send(JSON.stringify(req.body));
+  if (!data) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Bo'sh data keldi" });
+  }
+
+  // Hodisani faylga yozamiz (logs.json)
+  fs.appendFileSync("logs.json", JSON.stringify(data) + "\n");
+
+  console.log("📨 Yangi event keldi:", data);
+
+  // WebSocket orqali frontendga yuboramiz
+  const msg = JSON.stringify({ type: "access_event", data });
+  wss.clients.forEach((client) => {
+    if (client.readyState === 1) {
+      client.send(msg);
     }
   });
 
-  // Hikvision push ishlashi uchun javob
-  res.status(200).send("OK");
+  return res.json({ success: true, message: "Event qabul qilindi" });
 });
 
-// Server ishga tushirish
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(`🚀 Server ishga tushdi: http://0.0.0.0:${PORT}`);
-  console.log(`🌐 WebSocket: ws://<server-ip>:${PORT}`);
+// WebSocket ulanishi
+wss.on("connection", (ws) => {
+  console.log("🟢 Frontend ulandi WebSocket orqali");
+  ws.send(JSON.stringify({ type: "welcome", message: "WebSocket ishlayapti" }));
+});
+
+// Serverni ishga tushirish
+server.listen(PORT, () => {
+  console.log(`🚀 Server ishga tushdi: http://localhost:${PORT}`);
+  console.log(`🌐 WS manzil: ws://localhost:${PORT}`);
 });
